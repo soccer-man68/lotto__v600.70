@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <title>LOTTO NEURO-EVO v600.70 Robust</title>
-    <!-- SheetJS (Excel Parsing Library) -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <style>
         :root {
@@ -27,6 +26,47 @@
             display: flex;
             flex-direction: column;
             align-items: center;
+            min-height: 100vh;
+        }
+
+        /* 비밀번호 오버레이 */
+        #login-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+
+        .login-box {
+            background: var(--card-bg);
+            padding: 40px;
+            border-radius: 12px;
+            border: 1px solid #334155;
+            text-align: center;
+        }
+
+        .login-box input {
+            padding: 10px;
+            font-size: 18px;
+            border-radius: 4px;
+            border: 1px solid #475569;
+            background: #1e293b;
+            color: white;
+            margin-bottom: 15px;
+            width: 200px;
+            text-align: center;
+        }
+
+        /* 메인 컨텐츠 (인증 전 숨김) */
+        #main-content {
+            display: none;
+            width: 100%;
+            flex-direction: column;
+            align-items: center;
         }
 
         header {
@@ -37,18 +77,9 @@
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
 
-        h1 {
-            color: var(--accent);
-            margin: 0;
-            font-size: 24px;
-            font-weight: 800;
-        }
+        h1 { color: var(--accent); margin: 0; font-size: 24px; font-weight: 800; }
 
-        .container {
-            width: 90%;
-            max-width: 700px;
-            margin-top: 20px;
-        }
+        .container { width: 90%; max-width: 700px; margin-top: 20px; }
 
         .panel {
             background-color: var(--card-bg);
@@ -58,8 +89,7 @@
             margin-bottom: 15px;
         }
 
-        .row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-        .row:last-child { margin-bottom: 0; }
+        .row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
 
         button {
             padding: 8px 16px;
@@ -73,17 +103,15 @@
 
         button:active { opacity: 0.7; }
         .btn-load { background-color: #334155; }
+        .btn-save-file { background-color: #475569; } /* 파일 저장 */
         .btn-evolve { background-color: var(--btn-evolve); }
         .btn-stop { background-color: var(--danger); }
         .btn-result { background-color: var(--btn-result); }
         .btn-auto { background-color: var(--btn-auto); }
 
         select {
-            background: #1e293b;
-            color: white;
-            border: 1px solid #475569;
-            padding: 5px;
-            border-radius: 4px;
+            background: #1e293b; color: white;
+            border: 1px solid #475569; padding: 5px; border-radius: 4px;
         }
 
         #status-bar { text-align: center; font-weight: bold; margin: 10px 0; }
@@ -91,24 +119,15 @@
         .status-none { color: var(--danger); }
 
         #sets-display {
-            font-family: 'Consolas', monospace;
-            font-size: 24px;
-            line-height: 1.5;
-            white-space: pre;
-            text-align: center;
-            padding: 20px;
+            font-family: 'Consolas', monospace; font-size: 24px;
+            line-height: 1.5; white-space: pre; text-align: center; padding: 20px;
         }
         .match { color: var(--danger); font-weight: bold; }
 
         #bt-log, #evo-log {
-            font-family: 'Consolas', monospace;
-            font-size: 13px;
-            height: 150px;
-            overflow-y: auto;
-            background: #000;
-            padding: 10px;
-            border-radius: 4px;
-            margin-top: 10px;
+            font-family: 'Consolas', monospace; font-size: 13px;
+            height: 150px; overflow-y: auto; background: #000;
+            padding: 10px; border-radius: 4px; margin-top: 10px;
         }
         #evo-log { color: #34d399; height: 180px; }
         #bt-log { color: #94a3b8; }
@@ -117,52 +136,85 @@
 </head>
 <body>
 
-<header>
-    <h1>ROBUST NEURO-EVO v600.70 (Web)</h1>
-</header>
+<!-- 0. 보안 로그인 화면 -->
+<div id="login-overlay">
+    <div class="login-box">
+        <h2 style="color:var(--accent)">SECURITY CHECK</h2>
+        <p>비밀번호를 입력하세요</p>
+        <input type="password" id="pwInput" onkeydown="if(event.key==='Enter') checkAuth()">
+        <br>
+        <button class="btn-result" onclick="checkAuth()">접속하기</button>
+    </div>
+</div>
 
-<div class="container">
-    <!-- 1. 데이터 로드 섹션 -->
-    <div class="panel">
-        <div class="row">
-            <button class="btn-load" onclick="document.getElementById('fileInput').click()">📁 데이터 로드</button>
-            <input type="file" id="fileInput" hidden accept=".xlsx" onchange="handleFile(this)">
-            <span id="loadCount">상태: 데이터 없음</span>
+<div id="main-content">
+    <header>
+        <h1>ROBUST NEURO-EVO v600.70 (Web)</h1>
+    </header>
+
+    <div class="container">
+        <!-- 1. 데이터 및 로직 파일 관리 -->
+        <div class="panel">
+            <div class="row">
+                <button class="btn-load" onclick="document.getElementById('fileInput').click()">📁 데이터 로드 (.xlsx)</button>
+                <input type="file" id="fileInput" hidden accept=".xlsx" onchange="handleFile(this)">
+                
+                <span style="flex-grow: 1; text-align: center;" id="loadCount">데이터 없음</span>
+
+                <!-- 저장 폴더 기능을 대신하는 내보내기/가져오기 -->
+                <button class="btn-save-file" onclick="exportLogic()">📤 로직 내보내기</button>
+                <button class="btn-save-file" onclick="document.getElementById('logicInput').click()">📥 로직 가져오기</button>
+                <input type="file" id="logicInput" hidden accept=".json" onchange="importLogic(this)">
+            </div>
         </div>
-    </div>
 
-    <!-- 2. 컨트롤 섹션 -->
-    <div class="panel">
-        <div class="row">
-            <label>목표:</label>
-            <select id="targetScore">
-                <option value="2.5">2.5</option>
-                <option value="3.0">3.0</option>
-                <option value="3.2" selected>3.2</option>
-                <option value="3.5">3.5</option>
-                <option value="4.0">4.0</option>
-            </select>
-            <button id="evolveBtn" class="btn-evolve" onclick="toggleEvolution()">⚡ 진화 시작</button>
-            <button class="btn-result" onclick="runFixedAnalysis()">🎯 결과 추출</button>
-            <button id="autoBtn" class="btn-auto" onclick="toggleAutoAnalysis()">🔄 자동 추출</button>
+        <!-- 2. 컨트롤 섹션 -->
+        <div class="panel">
+            <div class="row">
+                <label>목표:</label>
+                <select id="targetScore">
+                    <option value="2.5">2.5</option>
+                    <option value="3.0">3.0</option>
+                    <option value="3.2" selected>3.2</option>
+                    <option value="3.5">3.5</option>
+                    <option value="4.0">4.0</option>
+                </select>
+                <button id="evolveBtn" class="btn-evolve" onclick="toggleEvolution()">⚡ 진화 시작</button>
+                <button class="btn-result" onclick="runFixedAnalysis()">🎯 결과 추출</button>
+                <button id="autoBtn" class="btn-auto" onclick="toggleAutoAnalysis()">🔄 자동 추출</button>
+            </div>
         </div>
-    </div>
 
-    <div id="status-bar" class="status-none">현재 로직: [없음] ❌</div>
+        <div id="status-bar" class="status-none">현재 로직: [없음] ❌</div>
 
-    <!-- 3. 결과 표시 섹션 -->
-    <div class="panel" style="background: var(--bg-color);">
-        <div id="sets-display"></div>
-    </div>
+        <!-- 3. 결과 표시 섹션 -->
+        <div class="panel" style="background: var(--bg-color);">
+            <div id="sets-display"></div>
+        </div>
 
-    <!-- 4. 백테스트 및 로그 -->
-    <div class="panel">
-        <div id="bt-log">백테스트 결과 대기 중...</div>
-        <div id="evo-log">로그 대기 중...</div>
+        <!-- 4. 백테스트 및 로그 -->
+        <div class="panel">
+            <div id="bt-log">백테스트 결과 대기 중...</div>
+            <div id="evo-log">시스템 로그 대기 중...</div>
+        </div>
     </div>
 </div>
 
 <script>
+// --- [Security] ---
+const CONST_PW = "4938"; // 비밀번호 설정
+
+function checkAuth() {
+    const input = document.getElementById('pwInput').value;
+    if (input === CONST_PW) {
+        document.getElementById('login-overlay').style.display = 'none';
+        document.getElementById('main-content').style.display = 'flex';
+    } else {
+        alert("비밀번호가 틀렸습니다.");
+        document.getElementById('pwInput').value = "";
+    }
+}
+
 // --- [Global State] ---
 let lottoData = [];
 let bestParams = null;
@@ -170,96 +222,72 @@ let bestScore = 0;
 let isEvolving = false;
 let isAutoExtracting = false;
 
-// --- [Logic: Filter] ---
+// --- [Logic: Filter & Engine] ---
+// (이전 답변과 동일한 v600.70 로직 유지)
 function advancedPatternFilter(nums) {
     nums.sort((a, b) => a - b);
     const sum = nums.reduce((a, b) => a + b, 0);
     if (sum < 85 || sum > 205) return false;
-    
     const oddCount = nums.filter(n => n % 2 !== 0).length;
     if (oddCount === 0 || oddCount === 6) return false;
-
     let diffs = new Set();
     for (let i = 0; i < nums.length; i++) {
-        for (let j = i + 1; j < nums.length; j++) {
-            diffs.add(nums[j] - nums[i]);
-        }
+        for (let j = i + 1; j < nums.length; j++) diffs.add(nums[j] - nums[i]);
     }
     const acVal = diffs.size - (nums.length - 1);
     if (acVal < 7) return false;
-
     for (let i = 0; i < nums.length - 2; i++) {
         if (nums[i] + 1 === nums[i + 1] && nums[i + 1] + 1 === nums[i + 2]) return false;
     }
     return true;
 }
 
-// --- [Logic: Engine] ---
 class NeuroEngine {
     constructor(df, params) {
         this.df = df;
         this.params = params;
         this.weights = this.calculateWeights();
         this.coreSize = Math.floor(Math.min(Math.max(params.core_size || 16, 14), 20));
-        
-        // 정렬된 인덱스 (번호 1~45)
         let indices = Array.from({length: 45}, (_, i) => i + 1);
         indices.sort((a, b) => this.weights[b] - this.weights[a]);
         this.superCore = indices.slice(0, this.coreSize);
     }
-
     calculateWeights() {
         let w = new Array(46).fill(1.0);
         try {
-            // 최근 15회차 빈도
             const recentRows = this.df.slice(-15);
-            recentRows.forEach(row => {
-                row.nums.forEach(n => { if(n >=1 && n <=45) w[n] += this.params.w_recent; });
-            });
-
-            // 미출현 기간(Gap) 분석
+            recentRows.forEach(row => row.nums.forEach(n => { if(n >=1 && n <=45) w[n] += this.params.w_recent; }));
             let lastIndices = {};
             for (let i = this.df.length - 1; i >= 0; i--) {
-                this.df[i].nums.forEach(n => {
-                    if (!(n in lastIndices)) lastIndices[n] = (this.df.length - 1 - i);
-                });
+                this.df[i].nums.forEach(n => { if (!(n in lastIndices)) lastIndices[n] = (this.df.length - 1 - i); });
             }
             for (let n = 1; n <= 45; n++) {
                 let gap = lastIndices[n] !== undefined ? lastIndices[n] : 100;
                 if (gap >= 6 && gap <= 15) w[n] += this.params.w_gap;
                 if (gap > 22) w[n] += (this.params.w_gap * 0.4);
             }
-
-            // 이웃수
             const lastRow = this.df[this.df.length - 1].nums;
             lastRow.forEach(n => {
                 if (n - 1 >= 1) w[n - 1] += this.params.w_neighbor;
                 if (n + 1 <= 45) w[n + 1] += this.params.w_neighbor;
             });
         } catch (e) {}
-
         w[0] = 0;
-        // [과적합 방지 1] 노이즈 주입
         for(let i=1; i<=45; i++) w[i] *= (0.98 + Math.random() * 0.04);
-        
-        // [과적합 방지 2] 규제 및 스무딩
         const maxW = Math.max(...w);
         let finalW = w.map(v => Math.exp((v / (maxW + 1e-9)) * 2.2) + 0.1);
         finalW[0] = 0;
         const sumW = finalW.reduce((a, b) => a + b, 0);
         return finalW.map(v => v / sumW);
     }
-
     weightedSample() {
-        let r = Math.random();
-        let acc = 0;
+        let r = Math.random(), acc = 0;
         for (let i = 1; i <= 45; i++) {
             acc += this.weights[i];
             if (r <= acc) return i;
         }
         return Math.floor(Math.random() * 45) + 1;
     }
-
     generateSets(count = 6) {
         let results = [];
         for (let i = 0; i < count; i++) {
@@ -267,21 +295,11 @@ class NeuroEngine {
             for (let attempt = 0; attempt < 600; attempt++) {
                 let pickN = Math.min(this.superCore.length, 3 + Math.floor(Math.random() * 3));
                 let combo = new Set();
-                
-                // Super Core에서 일부 샘플링
                 let shuffledCore = [...this.superCore].sort(() => 0.5 - Math.random());
                 shuffledCore.slice(0, pickN).forEach(n => combo.add(n));
-                
-                // 나머지는 가중치로 채움
-                while (combo.size < 6) {
-                    combo.add(this.weightedSample());
-                }
-                
+                while (combo.size < 6) combo.add(this.weightedSample());
                 let candidate = Array.from(combo).sort((a, b) => a - b);
-                if (advancedPatternFilter(candidate)) {
-                    validCombo = candidate;
-                    break;
-                }
+                if (advancedPatternFilter(candidate)) { validCombo = candidate; break; }
             }
             results.push(validCombo || Array.from({length:6}, () => Math.floor(Math.random()*45)+1));
         }
@@ -289,63 +307,76 @@ class NeuroEngine {
     }
 }
 
-// --- [Web UI Functions] ---
-function writeEvoLog(msg) {
-    const logArea = document.getElementById('evo-log');
-    logArea.innerHTML += msg + "<br>";
-    logArea.scrollTop = logArea.scrollHeight;
+// --- [File Management] ---
+// 로직 파일을 JSON으로 내보내기 (저장 폴더 대체)
+function exportLogic() {
+    if (!bestParams) return alert("저장할 로직이 없습니다.");
+    const data = { ...bestParams, score: bestScore };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `neuro_logic_v70_${bestScore.toFixed(2)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
 }
 
+// 로직 파일 불러오기
+async function importLogic(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const text = await file.text();
+    try {
+        const data = JSON.parse(text);
+        bestParams = data;
+        bestScore = data.score || 0;
+        updateStatusUI();
+        alert("로직을 성공적으로 불러왔습니다.");
+        if (lottoData.length > 0) runFixedAnalysis();
+    } catch (e) {
+        alert("올바른 JSON 파일이 아닙니다.");
+    }
+    input.value = "";
+}
+
+// --- [Core Functions] ---
 async function handleFile(input) {
     const file = input.files[0];
+    if (!file) return;
     const data = await file.arrayBuffer();
     const workbook = XLSX.read(data);
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-
     lottoData = [];
     json.forEach(row => {
-        // 첫 컬럼이 숫자(회차)인 데이터만 추출
         if (row[0] && !isNaN(row[0])) {
             let nums = row.slice(1, 7).map(n => parseInt(n)).filter(n => !isNaN(n));
-            if (nums.length === 6) {
-                lottoData.push({ round: parseInt(row[0]), nums: nums });
-            }
+            if (nums.length === 6) lottoData.push({ round: parseInt(row[0]), nums: nums });
         }
     });
     lottoData.sort((a, b) => a.round - b.round);
     document.getElementById('loadCount').innerText = `로드됨: ${lottoData.length}회`;
     document.getElementById('loadCount').style.color = "var(--success)";
-    
     loadStoredParams();
 }
 
 function calculateScore(params) {
     if (lottoData.length < 30) return 0;
     let scores = [];
-    
     [0, 10, 20].forEach(offset => {
         let testIdx = lottoData.length - offset;
         if (testIdx < 10) return;
-        
         let trainData = lottoData.slice(0, testIdx - 5);
         let eng = new NeuroEngine(trainData, params);
-        
         let roundScores = [];
         for (let j = 0; j < 5; j++) {
             let actual = new Set(lottoData[testIdx - 5 + j].nums);
             let sets = eng.generateSets(6);
-            let maxHit = Math.max(...sets.map(s => s.filter(n => actual.has(n)).length));
-            roundScores.push(maxHit);
+            roundScores.push(Math.max(...sets.map(s => s.filter(n => actual.has(n)).length)));
         }
-        let avg = roundScores.reduce((a,b)=>a+b, 0) / 5;
-        scores.push(avg);
+        scores.push(roundScores.reduce((a,b)=>a+b, 0) / 5);
     });
-
-    if (scores.length === 0) return 0;
-    let totalAvg = scores.reduce((a,b)=>a+b, 0) / scores.length;
-    let minVal = Math.min(...scores);
-    return (totalAvg * 0.7) + (minVal * 0.3);
+    return scores.length ? (scores.reduce((a,b)=>a+b, 0)/scores.length)*0.7 + Math.min(...scores)*0.3 : 0;
 }
 
 function updateSetsUI(sets) {
@@ -356,8 +387,7 @@ function updateSetsUI(sets) {
         let line = `SET ${i+1}  `;
         s.sort((a,b)=>a-b).forEach(n => {
             let numStr = n.toString().padStart(2, '0');
-            if (lastNums.has(n)) line += `<span class="match">${numStr}</span> `;
-            else line += `${numStr} `;
+            line += lastNums.has(n) ? `<span class="match">${numStr}</span> ` : `${numStr} `;
         });
         display.innerHTML += line + "<br>";
     });
@@ -365,86 +395,53 @@ function updateSetsUI(sets) {
 
 function runBacktest(sets) {
     const log = document.getElementById('bt-log');
-    log.innerHTML = "최근 5회 백테스트 결과<br>---------------------------------------<br>";
+    log.innerHTML = "백테스트 (최근 5회)<br>---------------------------------------<br>";
     let history = [];
     for (let i = 0; i < 5; i++) {
         let data = lottoData[lottoData.length - 1 - i];
         let actual = new Set(data.nums);
         let rowStr = `${data.round.toString().padStart(4)} | ${data.nums.map(n=>n.toString().padStart(2,'0')).join(' ')} | `;
-        
         let hits = sets.map(s => s.filter(n => actual.has(n)).length);
-        let maxHit = Math.max(...hits);
-        history.push(maxHit);
-
-        hits.forEach(h => {
-            let tag = h >= 3 ? `<span class="hit-red">[${h}]</span>` : `[${h}]`;
-            rowStr += tag + " ";
-        });
-        log.innerHTML += rowStr + ` (Max:${maxHit})<br>`;
+        let maxH = Math.max(...hits);
+        history.push(maxH);
+        hits.forEach(h => rowStr += (h >= 3 ? `<span class="hit-red">[${h}]</span> ` : `[${h}] `));
+        log.innerHTML += rowStr + ` (Max:${maxH})<br>`;
     }
     return history;
 }
 
-// --- [Looping Tasks] ---
 async function toggleEvolution() {
     if (isEvolving) {
         isEvolving = false;
         document.getElementById('evolveBtn').innerText = "⚡ 진화 시작";
         document.getElementById('evolveBtn').className = "btn-evolve";
-        saveParams();
-        return;
+        saveParams(); return;
     }
     if (lottoData.length === 0) return alert("데이터를 먼저 로드하세요.");
-
     isEvolving = true;
     document.getElementById('evolveBtn').innerText = "🛑 중단(저장)";
     document.getElementById('evolveBtn').className = "btn-stop";
-    
     let target = parseFloat(document.getElementById('targetScore').value);
     if (!bestParams) bestParams = { w_recent: 20, w_gap: 15, w_neighbor: 10, core_size: 16 };
-    
-    let gen = 0;
-    let stagnation = 0;
-
-    writeEvoLog(`>> 견고한 진화 시작 (목표: ${target})`);
-
+    let gen = 0, stagnation = 0;
+    const logArea = document.getElementById('evo-log');
+    logArea.innerHTML += `>> 진화 시작 (목표: ${target})<br>`;
     while (isEvolving) {
         gen++;
         let currP = { ...bestParams };
         let step = stagnation < 300 ? 0.5 : 3.0;
-        
-        ['w_recent', 'w_gap', 'w_neighbor'].forEach(k => {
-            currP[k] = Math.max(1, currP[k] + (Math.random() * step * 2 - step));
-        });
+        ['w_recent', 'w_gap', 'w_neighbor'].forEach(k => currP[k] = Math.max(1, currP[k] + (Math.random() * step * 2 - step)));
         if (gen % 50 === 0) currP.core_size = 14 + Math.floor(Math.random() * 7);
-
         let score = calculateScore(currP);
-
         if (score > bestScore) {
-            stagnation = 0;
-            bestScore = score;
-            bestParams = currP;
-            writeEvoLog(`[G ${gen}] 신기록: ${score.toFixed(2)} 🚀`);
-            
-            let eng = new NeuroEngine(lottoData, bestParams);
-            let sets = eng.generateSets(6);
-            updateSetsUI(sets);
-            runBacktest(sets);
-            updateStatusUI();
-        } else {
-            stagnation++;
-        }
-
-        if (bestScore >= target) {
-            writeEvoLog(">> 목표 달성!");
-            toggleEvolution();
-            break;
-        }
-
-        if (gen % 100 === 0) {
-            await new Promise(r => setTimeout(r, 1)); // UI 정체 방지
-            saveParams(true);
-        }
+            stagnation = 0; bestScore = score; bestParams = currP;
+            logArea.innerHTML += `[G ${gen}] 신기록: ${score.toFixed(2)} 🚀<br>`;
+            logArea.scrollTop = logArea.scrollHeight;
+            let sets = new NeuroEngine(lottoData, bestParams).generateSets(6);
+            updateSetsUI(sets); runBacktest(sets); updateStatusUI();
+        } else stagnation++;
+        if (bestScore >= target) { alert("목표 달성!"); toggleEvolution(); break; }
+        if (gen % 100 === 0) { await new Promise(r => setTimeout(r, 1)); saveParams(true); }
     }
 }
 
@@ -456,27 +453,17 @@ async function toggleAutoAnalysis() {
         return;
     }
     if (!bestParams) return alert("진화 로직이 필요합니다.");
-    
     isAutoExtracting = true;
     document.getElementById('autoBtn').innerText = "🛑 중지";
     document.getElementById('autoBtn').className = "btn-stop";
-
     while (isAutoExtracting) {
-        let eng = new NeuroEngine(lottoData, bestParams);
-        let sets = eng.generateSets(6);
+        let sets = new NeuroEngine(lottoData, bestParams).generateSets(6);
         let history = runBacktest(sets);
         let avg = history.reduce((a,b)=>a+b, 0) / 5;
-        
-        let rank = "";
-        if (avg >= 3.4 && history[0] >= 3) rank = "🏆 [S급] 강력 추천";
-        else if (avg >= 3.0 && history.every(h => h >= 2)) rank = "🥈 [A급] 안정형";
-        else if (history.some(h => h >= 5)) rank = "🥉 [B급] 한방형";
-
+        let rank = (avg >= 3.4 && history[0] >= 3) ? "🏆 [S급]" : (avg >= 3.0 && history.every(h=>h>=2)) ? "🥈 [A급]" : (history.some(h=>h>=5)) ? "🥉 [B급]" : "";
         if (rank) {
-            updateSetsUI(sets);
-            alert(`추출 완료!\n${rank}\n최근 5회 평균: ${avg.toFixed(2)}`);
-            toggleAutoAnalysis();
-            break;
+            updateSetsUI(sets); alert(`추출 완료!\n${rank}\n평균: ${avg.toFixed(2)}`);
+            toggleAutoAnalysis(); break;
         }
         await new Promise(r => setTimeout(r, 50));
     }
@@ -484,48 +471,32 @@ async function toggleAutoAnalysis() {
 
 function runFixedAnalysis() {
     if (!bestParams || lottoData.length === 0) return;
-    let eng = new NeuroEngine(lottoData, bestParams);
-    let sets = eng.generateSets(6);
-    updateSetsUI(sets);
-    runBacktest(sets);
+    let sets = new NeuroEngine(lottoData, bestParams).generateSets(6);
+    updateSetsUI(sets); runBacktest(sets);
 }
 
-// --- [Storage] ---
 function saveParams(silent = false) {
     if (!bestParams) return;
-    const data = { ...bestParams, score: bestScore };
-    localStorage.setItem('lotto_robust_params', JSON.stringify(data));
+    localStorage.setItem('lotto_robust_params_v70', JSON.stringify({ ...bestParams, score: bestScore }));
     updateStatusUI();
-    if(!silent) writeEvoLog(`>> 파라미터(${bestScore.toFixed(2)}) 저장됨.`);
 }
 
 function loadStoredParams() {
-    const saved = localStorage.getItem('lotto_robust_params');
+    const saved = localStorage.getItem('lotto_robust_params_v70');
     if (saved) {
         const data = JSON.parse(saved);
-        bestParams = data;
-        bestScore = data.score || 0;
-        updateStatusUI();
-        runFixedAnalysis();
+        bestParams = data; bestScore = data.score || 0;
+        updateStatusUI(); runFixedAnalysis();
     }
 }
 
 function updateStatusUI() {
     const bar = document.getElementById('status-bar');
-    if (bestScore > 0) {
-        bar.innerText = `현재 로직: [${bestScore.toFixed(2)}점] 저장 완료 ✅`;
-        bar.className = "status-ok";
-    } else {
-        bar.innerText = `현재 로직: [없음] ❌`;
-        bar.className = "status-none";
-    }
+    bar.innerText = bestScore > 0 ? `현재 로직: [${bestScore.toFixed(2)}점] 저장 완료 ✅` : `현재 로직: [없음] ❌`;
+    bar.className = bestScore > 0 ? "status-ok" : "status-none";
 }
 
-// Enter 키 바인딩
-document.addEventListener('keydown', (e) => {
-    if (e.key === "Enter") runFixedAnalysis();
-});
+document.addEventListener('keydown', (e) => { if (e.key === "Enter") runFixedAnalysis(); });
 </script>
-
 </body>
 </html>
