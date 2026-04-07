@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>LOTTO NEURO-EVO v600.70 Robust</title>
+    <!-- SheetJS (Excel Parsing Library) -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #020617;
+            --card-bg: #0f172a;
+            --header-bg: #1e1b4b;
+            --text-main: #94a3b8;
+            --accent: #38bdf8;
+            --success: #10b981;
+            --danger: #f43f5e;
+            --btn-evolve: #059669;
+            --btn-result: #4338ca;
+            --btn-auto: #7c3aed;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Malgun Gothic', sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        header {
+            width: 100%;
+            background-color: var(--header-bg);
+            padding: 20px 0;
+            text-align: center;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: var(--accent);
+            margin: 0;
+            font-size: 24px;
+            font-weight: 800;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 700px;
+            margin-top: 20px;
+        }
+
+        .panel {
+            background-color: var(--card-bg);
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+        .row:last-child { margin-bottom: 0; }
+
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            color: white;
+            font-weight: bold;
+            transition: opacity 0.2s;
+        }
+
+        button:active { opacity: 0.7; }
+        .btn-load { background-color: #334155; }
+        .btn-evolve { background-color: var(--btn-evolve); }
+        .btn-stop { background-color: var(--danger); }
+        .btn-result { background-color: var(--btn-result); }
+        .btn-auto { background-color: var(--btn-auto); }
+
+        select {
+            background: #1e293b;
+            color: white;
+            border: 1px solid #475569;
+            padding: 5px;
+            border-radius: 4px;
+        }
+
+        #status-bar { text-align: center; font-weight: bold; margin: 10px 0; }
+        .status-ok { color: var(--success); }
+        .status-none { color: var(--danger); }
+
+        #sets-display {
+            font-family: 'Consolas', monospace;
+            font-size: 24px;
+            line-height: 1.5;
+            white-space: pre;
+            text-align: center;
+            padding: 20px;
+        }
+        .match { color: var(--danger); font-weight: bold; }
+
+        #bt-log, #evo-log {
+            font-family: 'Consolas', monospace;
+            font-size: 13px;
+            height: 150px;
+            overflow-y: auto;
+            background: #000;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        #evo-log { color: #34d399; height: 180px; }
+        #bt-log { color: #94a3b8; }
+        .hit-red { color: var(--danger); font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>ROBUST NEURO-EVO v600.70 (Web)</h1>
+</header>
+
+<div class="container">
+    <!-- 1. 데이터 로드 섹션 -->
+    <div class="panel">
+        <div class="row">
+            <button class="btn-load" onclick="document.getElementById('fileInput').click()">📁 데이터 로드</button>
+            <input type="file" id="fileInput" hidden accept=".xlsx" onchange="handleFile(this)">
+            <span id="loadCount">상태: 데이터 없음</span>
+        </div>
+    </div>
+
+    <!-- 2. 컨트롤 섹션 -->
+    <div class="panel">
+        <div class="row">
+            <label>목표:</label>
+            <select id="targetScore">
+                <option value="2.5">2.5</option>
+                <option value="3.0">3.0</option>
+                <option value="3.2" selected>3.2</option>
+                <option value="3.5">3.5</option>
+                <option value="4.0">4.0</option>
+            </select>
+            <button id="evolveBtn" class="btn-evolve" onclick="toggleEvolution()">⚡ 진화 시작</button>
+            <button class="btn-result" onclick="runFixedAnalysis()">🎯 결과 추출</button>
+            <button id="autoBtn" class="btn-auto" onclick="toggleAutoAnalysis()">🔄 자동 추출</button>
+        </div>
+    </div>
+
+    <div id="status-bar" class="status-none">현재 로직: [없음] ❌</div>
+
+    <!-- 3. 결과 표시 섹션 -->
+    <div class="panel" style="background: var(--bg-color);">
+        <div id="sets-display"></div>
+    </div>
+
+    <!-- 4. 백테스트 및 로그 -->
+    <div class="panel">
+        <div id="bt-log">백테스트 결과 대기 중...</div>
+        <div id="evo-log">로그 대기 중...</div>
+    </div>
+</div>
+
+<script>
+// --- [Global State] ---
+let lottoData = [];
+let bestParams = null;
+let bestScore = 0;
+let isEvolving = false;
+let isAutoExtracting = false;
+
+// --- [Logic: Filter] ---
+function advancedPatternFilter(nums) {
+    nums.sort((a, b) => a - b);
+    const sum = nums.reduce((a, b) => a + b, 0);
+    if (sum < 85 || sum > 205) return false;
+    
+    const oddCount = nums.filter(n => n % 2 !== 0).length;
+    if (oddCount === 0 || oddCount === 6) return false;
+
+    let diffs = new Set();
+    for (let i = 0; i < nums.length; i++) {
+        for (let j = i + 1; j < nums.length; j++) {
+            diffs.add(nums[j] - nums[i]);
+        }
+    }
+    const acVal = diffs.size - (nums.length - 1);
+    if (acVal < 7) return false;
+
+    for (let i = 0; i < nums.length - 2; i++) {
+        if (nums[i] + 1 === nums[i + 1] && nums[i + 1] + 1 === nums[i + 2]) return false;
+    }
+    return true;
+}
+
+// --- [Logic: Engine] ---
+class NeuroEngine {
+    constructor(df, params) {
+        this.df = df;
+        this.params = params;
+        this.weights = this.calculateWeights();
+        this.coreSize = Math.floor(Math.min(Math.max(params.core_size || 16, 14), 20));
+        
+        // 정렬된 인덱스 (번호 1~45)
+        let indices = Array.from({length: 45}, (_, i) => i + 1);
+        indices.sort((a, b) => this.weights[b] - this.weights[a]);
+        this.superCore = indices.slice(0, this.coreSize);
+    }
+
+    calculateWeights() {
+        let w = new Array(46).fill(1.0);
+        try {
+            // 최근 15회차 빈도
+            const recentRows = this.df.slice(-15);
+            recentRows.forEach(row => {
+                row.nums.forEach(n => { if(n >=1 && n <=45) w[n] += this.params.w_recent; });
+            });
+
+            // 미출현 기간(Gap) 분석
+            let lastIndices = {};
+            for (let i = this.df.length - 1; i >= 0; i--) {
+                this.df[i].nums.forEach(n => {
+                    if (!(n in lastIndices)) lastIndices[n] = (this.df.length - 1 - i);
+                });
+            }
+            for (let n = 1; n <= 45; n++) {
+                let gap = lastIndices[n] !== undefined ? lastIndices[n] : 100;
+                if (gap >= 6 && gap <= 15) w[n] += this.params.w_gap;
+                if (gap > 22) w[n] += (this.params.w_gap * 0.4);
+            }
+
+            // 이웃수
+            const lastRow = this.df[this.df.length - 1].nums;
+            lastRow.forEach(n => {
+                if (n - 1 >= 1) w[n - 1] += this.params.w_neighbor;
+                if (n + 1 <= 45) w[n + 1] += this.params.w_neighbor;
+            });
+        } catch (e) {}
+
+        w[0] = 0;
+        // [과적합 방지 1] 노이즈 주입
+        for(let i=1; i<=45; i++) w[i] *= (0.98 + Math.random() * 0.04);
+        
+        // [과적합 방지 2] 규제 및 스무딩
+        const maxW = Math.max(...w);
+        let finalW = w.map(v => Math.exp((v / (maxW + 1e-9)) * 2.2) + 0.1);
+        finalW[0] = 0;
+        const sumW = finalW.reduce((a, b) => a + b, 0);
+        return finalW.map(v => v / sumW);
+    }
+
+    weightedSample() {
+        let r = Math.random();
+        let acc = 0;
+        for (let i = 1; i <= 45; i++) {
+            acc += this.weights[i];
+            if (r <= acc) return i;
+        }
+        return Math.floor(Math.random() * 45) + 1;
+    }
+
+    generateSets(count = 6) {
+        let results = [];
+        for (let i = 0; i < count; i++) {
+            let validCombo = null;
+            for (let attempt = 0; attempt < 600; attempt++) {
+                let pickN = Math.min(this.superCore.length, 3 + Math.floor(Math.random() * 3));
+                let combo = new Set();
+                
+                // Super Core에서 일부 샘플링
+                let shuffledCore = [...this.superCore].sort(() => 0.5 - Math.random());
+                shuffledCore.slice(0, pickN).forEach(n => combo.add(n));
+                
+                // 나머지는 가중치로 채움
+                while (combo.size < 6) {
+                    combo.add(this.weightedSample());
+                }
+                
+                let candidate = Array.from(combo).sort((a, b) => a - b);
+                if (advancedPatternFilter(candidate)) {
+                    validCombo = candidate;
+                    break;
+                }
+            }
+            results.push(validCombo || Array.from({length:6}, () => Math.floor(Math.random()*45)+1));
+        }
+        return results;
+    }
+}
+
+// --- [Web UI Functions] ---
+function writeEvoLog(msg) {
+    const logArea = document.getElementById('evo-log');
+    logArea.innerHTML += msg + "<br>";
+    logArea.scrollTop = logArea.scrollHeight;
+}
+
+async function handleFile(input) {
+    const file = input.files[0];
+    const data = await file.arrayBuffer();
+    const workbook = XLSX.read(data);
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+    lottoData = [];
+    json.forEach(row => {
+        // 첫 컬럼이 숫자(회차)인 데이터만 추출
+        if (row[0] && !isNaN(row[0])) {
+            let nums = row.slice(1, 7).map(n => parseInt(n)).filter(n => !isNaN(n));
+            if (nums.length === 6) {
+                lottoData.push({ round: parseInt(row[0]), nums: nums });
+            }
+        }
+    });
+    lottoData.sort((a, b) => a.round - b.round);
+    document.getElementById('loadCount').innerText = `로드됨: ${lottoData.length}회`;
+    document.getElementById('loadCount').style.color = "var(--success)";
+    
+    loadStoredParams();
+}
+
+function calculateScore(params) {
+    if (lottoData.length < 30) return 0;
+    let scores = [];
+    
+    [0, 10, 20].forEach(offset => {
+        let testIdx = lottoData.length - offset;
+        if (testIdx < 10) return;
+        
+        let trainData = lottoData.slice(0, testIdx - 5);
+        let eng = new NeuroEngine(trainData, params);
+        
+        let roundScores = [];
+        for (let j = 0; j < 5; j++) {
+            let actual = new Set(lottoData[testIdx - 5 + j].nums);
+            let sets = eng.generateSets(6);
+            let maxHit = Math.max(...sets.map(s => s.filter(n => actual.has(n)).length));
+            roundScores.push(maxHit);
+        }
+        let avg = roundScores.reduce((a,b)=>a+b, 0) / 5;
+        scores.push(avg);
+    });
+
+    if (scores.length === 0) return 0;
+    let totalAvg = scores.reduce((a,b)=>a+b, 0) / scores.length;
+    let minVal = Math.min(...scores);
+    return (totalAvg * 0.7) + (minVal * 0.3);
+}
+
+function updateSetsUI(sets) {
+    const display = document.getElementById('sets-display');
+    const lastNums = new Set(lottoData[lottoData.length-1].nums);
+    display.innerHTML = "";
+    sets.forEach((s, i) => {
+        let line = `SET ${i+1}  `;
+        s.sort((a,b)=>a-b).forEach(n => {
+            let numStr = n.toString().padStart(2, '0');
+            if (lastNums.has(n)) line += `<span class="match">${numStr}</span> `;
+            else line += `${numStr} `;
+        });
+        display.innerHTML += line + "<br>";
+    });
+}
+
+function runBacktest(sets) {
+    const log = document.getElementById('bt-log');
+    log.innerHTML = "최근 5회 백테스트 결과<br>---------------------------------------<br>";
+    let history = [];
+    for (let i = 0; i < 5; i++) {
+        let data = lottoData[lottoData.length - 1 - i];
+        let actual = new Set(data.nums);
+        let rowStr = `${data.round.toString().padStart(4)} | ${data.nums.map(n=>n.toString().padStart(2,'0')).join(' ')} | `;
+        
+        let hits = sets.map(s => s.filter(n => actual.has(n)).length);
+        let maxHit = Math.max(...hits);
+        history.push(maxHit);
+
+        hits.forEach(h => {
+            let tag = h >= 3 ? `<span class="hit-red">[${h}]</span>` : `[${h}]`;
+            rowStr += tag + " ";
+        });
+        log.innerHTML += rowStr + ` (Max:${maxHit})<br>`;
+    }
+    return history;
+}
+
+// --- [Looping Tasks] ---
+async function toggleEvolution() {
+    if (isEvolving) {
+        isEvolving = false;
+        document.getElementById('evolveBtn').innerText = "⚡ 진화 시작";
+        document.getElementById('evolveBtn').className = "btn-evolve";
+        saveParams();
+        return;
+    }
+    if (lottoData.length === 0) return alert("데이터를 먼저 로드하세요.");
+
+    isEvolving = true;
+    document.getElementById('evolveBtn').innerText = "🛑 중단(저장)";
+    document.getElementById('evolveBtn').className = "btn-stop";
+    
+    let target = parseFloat(document.getElementById('targetScore').value);
+    if (!bestParams) bestParams = { w_recent: 20, w_gap: 15, w_neighbor: 10, core_size: 16 };
+    
+    let gen = 0;
+    let stagnation = 0;
+
+    writeEvoLog(`>> 견고한 진화 시작 (목표: ${target})`);
+
+    while (isEvolving) {
+        gen++;
+        let currP = { ...bestParams };
+        let step = stagnation < 300 ? 0.5 : 3.0;
+        
+        ['w_recent', 'w_gap', 'w_neighbor'].forEach(k => {
+            currP[k] = Math.max(1, currP[k] + (Math.random() * step * 2 - step));
+        });
+        if (gen % 50 === 0) currP.core_size = 14 + Math.floor(Math.random() * 7);
+
+        let score = calculateScore(currP);
+
+        if (score > bestScore) {
+            stagnation = 0;
+            bestScore = score;
+            bestParams = currP;
+            writeEvoLog(`[G ${gen}] 신기록: ${score.toFixed(2)} 🚀`);
+            
+            let eng = new NeuroEngine(lottoData, bestParams);
+            let sets = eng.generateSets(6);
+            updateSetsUI(sets);
+            runBacktest(sets);
+            updateStatusUI();
+        } else {
+            stagnation++;
+        }
+
+        if (bestScore >= target) {
+            writeEvoLog(">> 목표 달성!");
+            toggleEvolution();
+            break;
+        }
+
+        if (gen % 100 === 0) {
+            await new Promise(r => setTimeout(r, 1)); // UI 정체 방지
+            saveParams(true);
+        }
+    }
+}
+
+async function toggleAutoAnalysis() {
+    if (isAutoExtracting) {
+        isAutoExtracting = false;
+        document.getElementById('autoBtn').innerText = "🔄 자동 추출";
+        document.getElementById('autoBtn').className = "btn-auto";
+        return;
+    }
+    if (!bestParams) return alert("진화 로직이 필요합니다.");
+    
+    isAutoExtracting = true;
+    document.getElementById('autoBtn').innerText = "🛑 중지";
+    document.getElementById('autoBtn').className = "btn-stop";
+
+    while (isAutoExtracting) {
+        let eng = new NeuroEngine(lottoData, bestParams);
+        let sets = eng.generateSets(6);
+        let history = runBacktest(sets);
+        let avg = history.reduce((a,b)=>a+b, 0) / 5;
+        
+        let rank = "";
+        if (avg >= 3.4 && history[0] >= 3) rank = "🏆 [S급] 강력 추천";
+        else if (avg >= 3.0 && history.every(h => h >= 2)) rank = "🥈 [A급] 안정형";
+        else if (history.some(h => h >= 5)) rank = "🥉 [B급] 한방형";
+
+        if (rank) {
+            updateSetsUI(sets);
+            alert(`추출 완료!\n${rank}\n최근 5회 평균: ${avg.toFixed(2)}`);
+            toggleAutoAnalysis();
+            break;
+        }
+        await new Promise(r => setTimeout(r, 50));
+    }
+}
+
+function runFixedAnalysis() {
+    if (!bestParams || lottoData.length === 0) return;
+    let eng = new NeuroEngine(lottoData, bestParams);
+    let sets = eng.generateSets(6);
+    updateSetsUI(sets);
+    runBacktest(sets);
+}
+
+// --- [Storage] ---
+function saveParams(silent = false) {
+    if (!bestParams) return;
+    const data = { ...bestParams, score: bestScore };
+    localStorage.setItem('lotto_robust_params', JSON.stringify(data));
+    updateStatusUI();
+    if(!silent) writeEvoLog(`>> 파라미터(${bestScore.toFixed(2)}) 저장됨.`);
+}
+
+function loadStoredParams() {
+    const saved = localStorage.getItem('lotto_robust_params');
+    if (saved) {
+        const data = JSON.parse(saved);
+        bestParams = data;
+        bestScore = data.score || 0;
+        updateStatusUI();
+        runFixedAnalysis();
+    }
+}
+
+function updateStatusUI() {
+    const bar = document.getElementById('status-bar');
+    if (bestScore > 0) {
+        bar.innerText = `현재 로직: [${bestScore.toFixed(2)}점] 저장 완료 ✅`;
+        bar.className = "status-ok";
+    } else {
+        bar.innerText = `현재 로직: [없음] ❌`;
+        bar.className = "status-none";
+    }
+}
+
+// Enter 키 바인딩
+document.addEventListener('keydown', (e) => {
+    if (e.key === "Enter") runFixedAnalysis();
+});
+</script>
+
+</body>
+</html>
