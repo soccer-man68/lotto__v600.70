@@ -316,7 +316,7 @@ function exportLogic() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `neuro_logic_v70_${bestScore.toFixed(2)}.json`;
+    a.download = `neuro_logic_v600_${bestScore.toFixed(2)}.json`;
     a.click();
     URL.revokeObjectURL(url);
 }
